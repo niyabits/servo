@@ -8,7 +8,9 @@ use style::values::computed::Image;
 use stylo_atoms::atom;
 
 use crate::context::LayoutContext;
-use crate::dom_traversal::{NodeAndStyleInfo, PseudoElementContentItem};
+use crate::dom_traversal::{
+    NodeAndStyleInfo, PseudoElementContentItem, generate_pseudo_element_content,
+};
 use crate::replaced::ReplacedContents;
 
 /// <https://drafts.csswg.org/css-lists/#content-property>
@@ -20,6 +22,11 @@ pub(crate) fn make_marker<'dom>(
         info.with_pseudo_element(context, style::selector_parser::PseudoElement::Marker)?;
     let style = &marker_info.style;
     let list_style = style.get_list();
+
+    // https://drafts.csswg.org/css-lists/#content-property
+    let _marker_content = generate_pseudo_element_content(&marker_info, context);
+    // TODO: Remove, comment is for debugging
+    // println!("{:?}", marker_content);
 
     // https://drafts.csswg.org/css-lists/#marker-image
     let marker_image = || match &list_style.list_style_image {
