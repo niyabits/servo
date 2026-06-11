@@ -65,7 +65,7 @@ use crate::task::TaskBox;
 use crate::task_source::TaskSourceName;
 
 // Magic numbers
-const WORKLET_THREAD_POOL_SIZE: u32 = 3;
+const WORKLET_THREAD_POOL_SIZE: u32 = 1;
 const MIN_GC_THRESHOLD: u32 = 1_000_000;
 
 #[derive(JSTraceable, MallocSizeOf)]
@@ -422,10 +422,7 @@ struct WorkletThreadRole {
 impl WorkletThreadRole {
     fn new() -> WorkletThreadRole {
         let (sender, receiver) = unbounded();
-        WorkletThreadRole {
-            sender,
-            receiver,
-        }
+        WorkletThreadRole { sender, receiver }
     }
 }
 
@@ -436,7 +433,6 @@ struct WorkletThreadInit {
     primary_sender: Sender<WorkletData>,
     // hot_backup_sender: Sender<WorkletData>,
     // cold_backup_sender: Sender<WorkletData>,
-
     /// Data for initializing new worklet global scopes
     global_init: WorkletGlobalScopeInit,
 }
@@ -460,7 +456,6 @@ struct WorkletThread {
     primary_sender: Sender<WorkletData>,
     // hot_backup_sender: Sender<WorkletData>,
     // cold_backup_sender: Sender<WorkletData>,
-
     /// Data for initializing new worklet global scopes
     global_init: WorkletGlobalScopeInit,
 
