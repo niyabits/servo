@@ -34,7 +34,7 @@ use servo_base::generic_channel::GenericSend;
 use servo_base::id::{PipelineId, WebViewId};
 use servo_url::{ImmutableOrigin, ServoUrl};
 use style::thread_state::{self, ThreadState};
-use swapper::{Swapper, swapper};
+// use swapper::{Swapper, swapper};
 use uuid::Uuid;
 
 use crate::conversions::Convert;
@@ -65,7 +65,7 @@ use crate::task::TaskBox;
 use crate::task_source::TaskSourceName;
 
 // Magic numbers
-const WORKLET_THREAD_POOL_SIZE: u32 = 3;
+const WORKLET_THREAD_POOL_SIZE: u32 = 1;
 const MIN_GC_THRESHOLD: u32 = 1_000_000;
 
 #[derive(JSTraceable, MallocSizeOf)]
@@ -269,23 +269,23 @@ pub(crate) struct WorkletThreadPool {
     // Channels to send data messages to the three roles.
     #[no_trace]
     primary_sender: Sender<WorkletData>,
-    #[no_trace]
-    hot_backup_sender: Sender<WorkletData>,
-    #[no_trace]
-    cold_backup_sender: Sender<WorkletData>,
+    // #[no_trace]
+    // hot_backup_sender: Sender<WorkletData>,
+    // #[no_trace]
+    // cold_backup_sender: Sender<WorkletData>,
     // Channels to send control messages to the three threads.
     #[no_trace]
     control_sender_0: Sender<WorkletControl>,
-    #[no_trace]
-    control_sender_1: Sender<WorkletControl>,
-    #[no_trace]
-    control_sender_2: Sender<WorkletControl>,
+    // #[no_trace]
+    // control_sender_1: Sender<WorkletControl>,
+    // #[no_trace]
+    // control_sender_2: Sender<WorkletControl>,
 }
 
 impl Drop for WorkletThreadPool {
     fn drop(&mut self) {
-        let _ = self.cold_backup_sender.send(WorkletData::Quit);
-        let _ = self.hot_backup_sender.send(WorkletData::Quit);
+        // let _ = self.cold_backup_sender.send(WorkletData::Quit);
+        // let _ = self.hot_backup_sender.send(WorkletData::Quit);
         let _ = self.primary_sender.send(WorkletData::Quit);
     }
 }
@@ -294,25 +294,25 @@ impl WorkletThreadPool {
     /// Create a new thread pool and spawn the threads.
     /// When the thread pool is dropped, the threads will be asked to quit.
     pub(crate) fn spawn(global_init: WorkletGlobalScopeInit) -> WorkletThreadPool {
-        let primary_role = WorkletThreadRole::new(false, false);
-        let hot_backup_role = WorkletThreadRole::new(true, false);
-        let cold_backup_role = WorkletThreadRole::new(false, true);
+        let primary_role = WorkletThreadRole::new();
+        // let hot_backup_role = WorkletThreadRole::new(true, false);
+        // let cold_backup_role = WorkletThreadRole::new(false, true);
         let primary_sender = primary_role.sender.clone();
-        let hot_backup_sender = hot_backup_role.sender.clone();
-        let cold_backup_sender = cold_backup_role.sender.clone();
+        // let hot_backup_sender = hot_backup_role.sender.clone();
+        // let cold_backup_sender = cold_backup_role.sender.clone();
         let init = WorkletThreadInit {
             primary_sender: primary_sender.clone(),
-            hot_backup_sender: hot_backup_sender.clone(),
-            cold_backup_sender: cold_backup_sender.clone(),
+            // hot_backup_sender: hot_backup_sender.clone(),
+            // cold_backup_sender: cold_backup_sender.clone(),
             global_init,
         };
         WorkletThreadPool {
             primary_sender,
-            hot_backup_sender,
-            cold_backup_sender,
-            control_sender_0: WorkletThread::spawn(primary_role, init.clone(), 0),
-            control_sender_1: WorkletThread::spawn(hot_backup_role, init.clone(), 1),
-            control_sender_2: WorkletThread::spawn(cold_backup_role, init, 2),
+            // hot_backup_sender,
+            // cold_backup_sender,
+            control_sender_0: WorkletThread::spawn(primary_role, init, 0),
+            // control_sender_1: WorkletThread::spawn(hot_backup_role, init.clone(), 1),
+            // control_sender_2: WorkletThread::spawn(cold_backup_role, init, 2),
         }
     }
 
@@ -337,37 +337,29 @@ impl WorkletThreadPool {
         inherited_secure_context: Option<bool>,
     ) {
         // Send each thread a control message asking it to load the script.
-        for sender in &[
-            &self.control_sender_0,
-            &self.control_sender_1,
-            &self.control_sender_2,
-        ] {
-            let _ = sender.send(WorkletControl::FetchAndInvokeAWorkletScript {
-                webview_id,
-                pipeline_id,
-                worklet_id,
-                global_type,
-                origin: origin.clone(),
-                base_url: base_url.clone(),
-                script_url: script_url.clone(),
-                policy_container: policy_container.clone(),
-                credentials,
-                pending_tasks_struct: pending_tasks_struct.clone(),
-                promise: TrustedPromise::new(promise.clone()),
-                inherited_secure_context,
-            });
-        }
+        let sender = &self.control_sender_0;
+        let _ = sender.send(WorkletControl::FetchAndInvokeAWorkletScript {
+            webview_id,
+            pipeline_id,
+            worklet_id,
+            global_type,
+            origin,
+            base_url,
+            script_url,
+            policy_container,
+            credentials,
+            pending_tasks_struct,
+            promise: TrustedPromise::new(promise.clone()),
+            inherited_secure_context,
+        });
+
         self.wake_threads();
     }
 
     pub(crate) fn exit_worklet(&self, worklet_id: WorkletId) {
-        for sender in &[
-            &self.control_sender_0,
-            &self.control_sender_1,
-            &self.control_sender_2,
-        ] {
-            let _ = sender.send(WorkletControl::ExitWorklet(worklet_id));
-        }
+        let sender = &self.control_sender_0;
+        let _ = sender.send(WorkletControl::ExitWorklet(worklet_id));
+
         self.wake_threads();
     }
 
@@ -382,8 +374,8 @@ impl WorkletThreadPool {
 
     fn wake_threads(&self) {
         // If any of the threads are blocked waiting on data, wake them up.
-        let _ = self.cold_backup_sender.send(WorkletData::WakeUp);
-        let _ = self.hot_backup_sender.send(WorkletData::WakeUp);
+        // let _ = self.cold_backup_sender.send(WorkletData::WakeUp);
+        // let _ = self.hot_backup_sender.send(WorkletData::WakeUp);
         let _ = self.primary_sender.send(WorkletData::WakeUp);
     }
 }
@@ -391,8 +383,8 @@ impl WorkletThreadPool {
 /// The data messages sent to worklet threads
 enum WorkletData {
     Task(WorkletId, WorkletTask),
-    StartSwapRoles(Sender<WorkletData>),
-    FinishSwapRoles(Swapper<WorkletThreadRole>),
+    // StartSwapRoles(Sender<WorkletData>),
+    // FinishSwapRoles(Swapper<WorkletThreadRole>),
     WakeUp,
     Quit,
 }
@@ -425,19 +417,12 @@ enum WorkletControl {
 struct WorkletThreadRole {
     receiver: Receiver<WorkletData>,
     sender: Sender<WorkletData>,
-    is_hot_backup: bool,
-    is_cold_backup: bool,
 }
 
 impl WorkletThreadRole {
-    fn new(is_hot_backup: bool, is_cold_backup: bool) -> WorkletThreadRole {
+    fn new() -> WorkletThreadRole {
         let (sender, receiver) = unbounded();
-        WorkletThreadRole {
-            sender,
-            receiver,
-            is_hot_backup,
-            is_cold_backup,
-        }
+        WorkletThreadRole { sender, receiver }
     }
 }
 
@@ -446,9 +431,8 @@ impl WorkletThreadRole {
 struct WorkletThreadInit {
     /// Senders
     primary_sender: Sender<WorkletData>,
-    hot_backup_sender: Sender<WorkletData>,
-    cold_backup_sender: Sender<WorkletData>,
-
+    // hot_backup_sender: Sender<WorkletData>,
+    // cold_backup_sender: Sender<WorkletData>,
     /// Data for initializing new worklet global scopes
     global_init: WorkletGlobalScopeInit,
 }
@@ -470,9 +454,8 @@ struct WorkletThread {
 
     /// Senders
     primary_sender: Sender<WorkletData>,
-    hot_backup_sender: Sender<WorkletData>,
-    cold_backup_sender: Sender<WorkletData>,
-
+    // hot_backup_sender: Sender<WorkletData>,
+    // cold_backup_sender: Sender<WorkletData>,
     /// Data for initializing new worklet global scopes
     global_init: WorkletGlobalScopeInit,
 
@@ -519,8 +502,8 @@ impl WorkletThread {
                     role,
                     control_receiver,
                     primary_sender: init.primary_sender,
-                    hot_backup_sender: init.hot_backup_sender,
-                    cold_backup_sender: init.cold_backup_sender,
+                    // hot_backup_sender: init.hot_backup_sender,
+                    // cold_backup_sender: init.cold_backup_sender,
                     global_init: init.global_init,
                     global_scopes: FxHashMap::default(),
                     control_buffer: None,
@@ -550,23 +533,24 @@ impl WorkletThread {
                 //       the hot backup can block on the primary;
                 //       the primary can block on nothing;
                 //       this total ordering on thread roles is what guarantees deadlock-freedom.
-                WorkletData::StartSwapRoles(sender) => {
-                    let (our_swapper, their_swapper) = swapper();
-                    match sender.send(WorkletData::FinishSwapRoles(their_swapper)) {
-                        Ok(_) => {},
-                        Err(_) => {
-                            // This might happen if the script thread shuts down while
-                            // waiting for the worklet to finish.
-                            return;
-                        },
-                    };
-                    let _ = our_swapper.swap(&mut self.role);
-                },
+                //
+                // WorkletData::StartSwapRoles(sender) => {
+                //     let (our_swapper, their_swapper) = swapper();
+                //     match sender.send(WorkletData::FinishSwapRoles(their_swapper)) {
+                //         Ok(_) => {},
+                //         Err(_) => {
+                //             // This might happen if the script thread shuts down while
+                //             // waiting for the worklet to finish.
+                //             return;
+                //         },
+                //     };
+                //     let _ = our_swapper.swap(&mut self.role);
+                // },
                 // To finish swapping roles, perform the atomic swap.
                 // The other end should have already started the swap, so this shouldn't block.
-                WorkletData::FinishSwapRoles(swapper) => {
-                    let _ = swapper.swap(&mut self.role);
-                },
+                // WorkletData::FinishSwapRoles(swapper) => {
+                //     let _ = swapper.swap(&mut self.role);
+                // },
                 // Wake up! There may be control messages to process.
                 WorkletData::WakeUp => {},
                 // Quit!
@@ -574,35 +558,25 @@ impl WorkletThread {
                     return;
                 },
             }
-            // Only process control messages if we're the cold backup,
-            // otherwise if there are outstanding control messages,
-            // try to become the cold backup.
-            if self.role.is_cold_backup {
-                if let Some(control) = self.control_buffer.take() {
-                    self.process_control(control, cx);
-                }
-                while let Ok(control) = self.control_receiver.try_recv() {
-                    self.process_control(control, cx);
-                }
-                self.gc(cx);
-            } else if self.control_buffer.is_none() &&
-                let Ok(control) = self.control_receiver.try_recv()
-            {
-                self.control_buffer = Some(control);
-                let msg = WorkletData::StartSwapRoles(self.role.sender.clone());
-                let _ = self.cold_backup_sender.send(msg);
+
+            // process control messages
+            if let Some(control) = self.control_buffer.take() {
+                self.process_control(control, cx);
             }
+            while let Ok(control) = self.control_receiver.try_recv() {
+                self.process_control(control, cx);
+            }
+            self.gc(cx);
+
             // If we are tight on memory, and we're a backup then perform a gc.
             // If we are tight on memory, and we're the primary then try to become the hot backup.
             // Hopefully this happens soon!
             if self.current_memory_usage() > self.gc_threshold {
-                if self.role.is_hot_backup || self.role.is_cold_backup {
+                if self.should_gc {
                     self.should_gc = false;
                     self.gc(cx);
                 } else if !self.should_gc {
                     self.should_gc = true;
-                    let msg = WorkletData::StartSwapRoles(self.role.sender.clone());
-                    let _ = self.hot_backup_sender.send(msg);
                 }
             }
         }
