@@ -45,8 +45,8 @@ use crate::dom::{AttributeMutation, cors_setting_for_element};
 use crate::event_loop::script_thread::ScriptThread;
 use crate::fetch::fetch::{RequestWithGlobalScope, create_a_potential_cors_request};
 use crate::fetch::network_listener::{self, FetchResponseListener, ResourceTimingListener};
-use crate::microtask::MicrotaskRunnable;
 use crate::realms::enter_auto_realm;
+use crate::runtime::microtask::MicrotaskRunnable;
 
 #[derive(Clone, Copy, Default, JSTraceable, MallocSizeOf, PartialEq)]
 #[repr(u16)]
@@ -275,7 +275,7 @@ impl VirtualMethods for HTMLTrackElement {
                     // Step 4. Set the element's track URL to trackURL if it is not failure;
                     // otherwise to the empty string.
                     *self.track_url.borrow_mut() = if !value.is_empty() {
-                        self.owner_document().base_url().join(value).ok()
+                        self.owner_document().encoding_parse_a_url(value).ok()
                     } else {
                         None
                     };
